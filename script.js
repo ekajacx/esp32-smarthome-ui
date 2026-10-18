@@ -92,7 +92,6 @@ function handleLoginSubmit(event) {
     if(document.getElementById('rememberMe').checked) { localStorage.setItem('saved_user', u); }
     else { localStorage.removeItem('saved_user'); }
     sessionStorage.setItem('is_logged_in', 'true');
-    if(document.getElementById('rememberMe').checked) { localStorage.setItem('saved_user', u); }
     checkAuthSession();
   } else {
     let card = document.getElementById('login-card-box');
@@ -375,7 +374,20 @@ setInterval(() => {
   }
 }, 1000);
 
-function toggleRelay(num) { playClickSound(); fetch(espIp + '/toggle?r=' + num).then(res => updateData()); }
+// Optimasi tombol toggle agar merespon instan di layar (Optimistic UI)
+function toggleRelay(num) {
+  playClickSound();
+  let sw = document.getElementById('sw' + num);
+  let bulb = document.getElementById('bulb' + num);
+  sw.checked = !sw.checked;
+  if(sw.checked) { bulb.setAttribute('class', 'bulb-icon bulb-on'); }
+  else { bulb.setAttribute('class', 'bulb-icon bulb-off'); }
+
+  fetch(espIp + '/toggle?r=' + num).then(res => {
+    setTimeout(updateData, 200);
+  });
+}
+
 function masterControl(action) { playClickSound(); fetch(espIp + '/master?action=' + action).then(res => updateData()); }
 
 function updateData() {
@@ -383,6 +395,12 @@ function updateData() {
     if (!obj) return;
     isOnline = true;
     document.getElementById('status-box').innerHTML = '<span class="status-dot"></span><span class="status-text">ONLINE</span>';
+    
+    // Menampilkan SSID dan RSSI Wi-Fi dari ESP32 secara real-time
+    if (obj.ssid) {
+      document.getElementById('wifi-ssid-text').innerText = obj.ssid + " (" + obj.rssi + " dBm)";
+    }
+
     document.getElementById('temp').innerHTML = obj.temp.toFixed(1) + ' &deg;C';
     document.getElementById('hum').innerHTML = obj.hum.toFixed(1) + ' %';
     document.getElementById('temp-stat').innerText = 'Min: ' + obj.minT.toFixed(1) + '°C | Max: ' + obj.maxT.toFixed(1) + '°C';
