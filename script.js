@@ -374,7 +374,7 @@ setInterval(() => {
   }
 }, 1000);
 
-// Optimasi tombol toggle agar merespon instan di layar (Optimistic UI)
+// Optimistic UI: Tombol langsung merespon instan di layar
 function toggleRelay(num) {
   playClickSound();
   let sw = document.getElementById('sw' + num);
@@ -396,7 +396,7 @@ function updateData() {
     isOnline = true;
     document.getElementById('status-box').innerHTML = '<span class="status-dot"></span><span class="status-text">ONLINE</span>';
     
-    // Menampilkan SSID dan RSSI Wi-Fi dari ESP32 secara real-time
+    // Indikator Wi-Fi real-time
     if (obj.ssid) {
       document.getElementById('wifi-ssid-text').innerText = obj.ssid + " (" + obj.rssi + " dBm)";
     }
