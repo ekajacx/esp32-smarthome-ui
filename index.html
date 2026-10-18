@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name='viewport' content='width=device-width, initial-scale=1, maximum-scale=1'>
+    <link rel='manifest' href='/manifest.json'>
+    <meta name='theme-color' content='#131722'>
+    <title>Local Relay Controller 3D (ESP32)</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <canvas id='bgCanvas'></canvas>
+    
+    <div id='sched-modal' class='sched-modal-overlay'>
+        <div class='sched-modal-box'>
+            <div id='modal-sched-title' class='sched-modal-title'>Atur Jadwal</div>
+            <label class='sched-modal-label'>Pilih Hari</label>
+            <div class='days-picker'>
+                <div id='modal-day-0' class='day-box' onclick='selectModalDay(0)'>Min</div>
+                <div id='modal-day-1' class='day-box' onclick='selectModalDay(1)'>Sen</div>
+                <div id='modal-day-2' class='day-box' onclick='selectModalDay(2)'>Sel</div>
+                <div id='modal-day-3' class='day-box' onclick='selectModalDay(3)'>Rab</div>
+                <div id='modal-day-4' class='day-box' onclick='selectModalDay(4)'>Kam</div>
+                <div id='modal-day-5' class='day-box' onclick='selectModalDay(5)'>Jum</div>
+                <div id='modal-day-6' class='day-box' onclick='selectModalDay(6)'>Sab</div>
+            </div>
+            <label class='sched-modal-label'>Jadwal ON</label>
+            <input type='time' id='modal-on-time' oninput='validateModalSaveButton()'>
+            <label class='sched-modal-label'>Jadwal OFF</label>
+            <input type='time' id='modal-off-time' oninput='validateModalSaveButton()'>
+            
+            <div id='apply-checkbox-container' class='apply-checkbox-group' style='display:none;'>
+                <label style='font-size:10px; color:var(--accent-cyan); margin-bottom:6px; display:block;'>Terapkan pengaturan ini ke:</label>
+                <label><input type='checkbox' id='apply-r1' checked> R1: Lampu Parkir</label>
+                <label><input type='checkbox' id='apply-r2' checked> R2: Lampu Taman Baru</label>
+                <label><input type='checkbox' id='apply-r3' checked> R3: Lampu Teras Samping</label>
+                <label><input type='checkbox' id='apply-r4' checked> R4: Stop Kontak</label>
+            </div>
+
+            <div class='day-action-row'><button type='button' class='clear-day-btn' onclick='clearCurrentDay()'>Bersihkan Jadwal</button></div>
+            <div class='sched-modal-btn-row'>
+                <button type='button' class='sched-cancel-btn' onclick='closeSchedModal()'>Batal</button>
+                <button type='button' id='modal-save-btn' class='sched-save-btn' onclick='saveModalSchedule()' disabled>Simpan Semua</button>
+            </div>
+        </div>
+    </div>
+
+    <div id='preview-modal' class='sched-modal-overlay'>
+        <div class='sched-modal-box'>
+            <div id='preview-modal-title' class='sched-modal-title'>Daftar Jadwal</div>
+            <div id='preview-list-content' class='preview-list-box'></div>
+            <div class='sched-modal-btn-row' style='margin-top:12px;'>
+                <button type='button' class='sched-save-btn' style='max-width:100%;' onclick='closePreviewModal()'>Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <div id='custom-modal' class='custom-modal-overlay'>
+        <div class='custom-modal-box'>
+            <div id='modal-icon' class='custom-modal-icon'>🎉</div>
+            <div id='custom-modal-msg' class='custom-modal-text'>Pesan</div>
+            <div class='custom-modal-btn-container'>
+                <button id='modal-cancel-btn' class='custom-modal-btn-cancel' style='display:none;'>Batal</button>
+                <button id='modal-ok-btn' class='custom-modal-btn'>OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAMPILAN LOGIN (Akan disembunyikan otomatis oleh JS jika sudah login) -->
+    <div id='login-view' class='login-wrapper-container' style='display:none;'>
+        <div class='system-status-badge'>
+            <div class='wifi-bars'>
+                <span class='wifi-bar wifi-bar-1'></span>
+                <span class='wifi-bar wifi-bar-2'></span>
+                <span class='wifi-bar wifi-bar-3'></span>
+                <span class='wifi-bar wifi-bar-4'></span>
+            </div>
+            <span id='login-wifi-status'>SYSTEM ONLINE</span>
+        </div>
+        <div id='login-card-box' class='login-card'>
+            <h2 id='typingTitle'></h2>
+            <div id='errorMsgBox' class='error' style='display:none;'></div>
+            <form onsubmit='handleLoginSubmit(event)'>
+                <div class='input-group'><input type='text' id='userInput' placeholder='Username' required autocomplete='off' onfocus='playClickSound()'></div>
+                <div class='input-group'><input type='password' id='passInput' placeholder='Password' required onfocus='playClickSound()'><button type='button' id='eyeBtn' class='toggle-pass' onclick='togglePassword()'>👁️</button><div id='capsWarn' class='capslock-warning'>⚠️ Caps Lock Aktif</div></div>
+                <label class='remember-row'><input type='checkbox' id='rememberMe' onclick='playClickSound()'> Ingat Username Saya</label>
+                <button type='submit' id='submitBtn' class='login-submit'>Masuk Dashboard</button>
+            </form>
+        </div>
+        <div class='top-controls'><button class='mini-btn' onclick='toggleTheme()'>🌓 Tema</button></div>
+        <div class='footer-credit'>Local Relay Controller (ESP32) Developed by <span>Eka Jacx</span></div>
+    </div>
+
+    <!-- TAMPILAN DASHBOARD UTAMA -->
+    <div id='dashboard-view' style='display:none;'>
+        <div class='container'>
+            <div id='status-box' class='top-info-box'><span class='status-dot'></span><span class='status-text'>MEMERIKSA...</span></div>
+            <div class='top-info-box'>
+                <svg class='wifi-icon' viewBox='0 0 24 24'><path d='M12,3C7.79,3 3.7,4.41 0.38,6.8L12,21.39L23.62,6.8C20.3,4.41 16.21,3 12,3Z'/></svg>
+                <div class='wifi-marquee-wrapper'><span id='wifi-ssid-text' class='wifi-running-text'>CONNECTING...</span></div>
+            </div>
+        </div>
+
+        <div class='uptime-lcd-container'>
+            <div class='uptime-title'>Durasi Perangkat Menyala</div>
+            <div id='uptime-display' class='uptime-lcd-screen'>0d : 0h : 0m : 0s</div>
+        </div>
+
+        <div class='container'>
+            <div id='temp-box' class='sensor-box'><div class='sensor-title'>Suhu</div><div id='temp' class='digital-value'>-- &deg;C</div><div id='temp-stat' class='sensor-stat'>Min: --°C | Max: --°C</div></div>
+            <div class='sensor-box'><div class='sensor-title'>Kelembaban</div><div id='hum' class='digital-value'>-- %</div><div id='hum-stat' class='sensor-stat'>Min: --% | Max: --%</div></div>
+        </div>
+
+        <div class='master-sched-box'>
+            <div class='master-sched-title'>Master Kontrol Jadwal Global</div>
+            <div id='master-lcd-status' class='master-lcd-screen'><div class='lcd-col' style='color:var(--sub-text);'>MEMUAT...</div></div>
+            <button type='button' id='expand-master-btn' class='expand-master-btn' style='display:none;' onclick='toggleMasterExpand()'><span id='expand-master-btn-text'>▼ Lihat Jadwal Global</span></button>
+            <div id='master-expand-panel' class='master-lcd-expand-panel'>
+                <div class='lcd-expand-header'><span>[ DETAIL JADWAL GLOBAL ]</span><span>STATUS</span></div>
+                <div id='master-expand-list'></div>
+            </div>
+            <div style='display:none;'>
+                <input type='hidden' id='master-on-0'><input type='hidden' id='master-off-0'>
+                <input type='hidden' id='master-on-1'><input type='hidden' id='master-off-1'>
+                <input type='hidden' id='master-on-2'><input type='hidden' id='master-off-2'>
+                <input type='hidden' id='master-on-3'><input type='hidden' id='master-off-3'>
+                <input type='hidden' id='master-on-4'><input type='hidden' id='master-off-4'>
+                <input type='hidden' id='master-on-5'><input type='hidden' id='master-off-5'>
+                <input type='hidden' id='master-on-6'><input type='hidden' id='master-off-6'>
+            </div>
+            <button type='button' id='master-sched-btn' class='master-sched-btn' onclick='clickAturMasterJadwal()'>Atur Jadwal Global</button>
+            <button type='button' class='del-timer-btn' id='master-del-btn' style='margin-top:8px; display:none; width:100%;' onclick='deleteMasterTimer()'>HAPUS JADWAL GLOBAL</button>
+        </div>
+
+        <div class='relay-section-wrapper'>
+            <div class='relay-section-title'>Kontrol Relay 4 Channel</div>
+            
+            <!-- Relay 1 -->
+            <div id='card-1' class='neu-card'>
+                <div class='relay-title-wrapper'><div id='relay-title-1' class='relay-title-text'>Lampu Parkir</div></div>
+                <div class='mode-toggle-box'><button id='btn-man-1' class='mode-btn active-manual' onclick='setRelayMode(1, "manual")'>MANUAL</button><button id='btn-auto-1' class='mode-btn' onclick='setRelayMode(1, "auto")'>AUTO</button></div>
+                <div id='mode-status-1' class='mode-status-text'>Mode Manual Aktif</div>
+                <svg id='bulb1' class='bulb-icon bulb-off' viewBox='0 0 24 24'><path d='M12,2A7,7 0 0,0 5,9C5,11.38 6.19,13.47 8,14.74V17A1,1 0 0,0 9,18H15A1,1 0 0,0 16,17V14.74C17.81,13.47 19,11.38 19,9A7,7 0 0,0 12,2M9,20A1,1 0 0,0 10,21H14A1,1 0 0,0 15,20V19H9V20Z'/></svg>
+                <div class='switch-container'><label class='switch'><input type='checkbox' id='sw1' onclick='toggleRelay(1)'><span class='slider'></span></label></div>
+                <div style='display:none;'>
+                    <input type='hidden' id='on-val-1-0'><input type='hidden' id='off-val-1-0'><input type='hidden' id='on-val-1-1'><input type='hidden' id='off-val-1-1'><input type='hidden' id='on-val-1-2'><input type='hidden' id='off-val-1-2'><input type='hidden' id='on-val-1-3'><input type='hidden' id='off-val-1-3'><input type='hidden' id='on-val-1-4'><input type='hidden' id='off-val-1-4'><input type='hidden' id='on-val-1-5'><input type='hidden' id='off-val-1-5'><input type='hidden' id='on-val-1-6'><input type='hidden' id='off-val-1-6'>
+                </div>
+                <div class='timer-section'><div class='sched-btn-row'>
+                    <button type='button' id='open-sched-btn-1' class='open-sched-btn' onclick='clickAturRelayJadwal(1)' disabled>Atur Jadwal</button>
+                    <button type='button' id='del-btn-1' class='del-timer-btn' onclick='deleteRelayTimer(1)' disabled>Hapus Jadwal</button>
+                </div><div id='sched-status-1'></div></div>
+                <div class='card-footer-row'>
+                    <button type='button' class='sync-icon-btn' onclick='openPreviewModal(1)' title='Lihat Detail Jadwal'>&#128065;</button>
+                    <button type='button' id='sync-btn-1' class='sync-icon-btn' onclick='syncRelayWithMaster(1)' title='Sinkronisasi Master'><svg viewBox='0 0 24 24'><path d='M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z'/></svg></button>
+                    <div class='card-center-bottom-label'>R1</div>
+                </div>
+            </div>
+
+            <!-- Relay 2 -->
+            <div id='card-2' class='neu-card'>
+                <div class='relay-title-wrapper'><div id='relay-title-2' class='relay-title-text'>Lampu Taman Baru</div></div>
+                <div class='mode-toggle-box'><button id='btn-man-2' class='mode-btn active-manual' onclick='setRelayMode(2, "manual")'>MANUAL</button><button id='btn-auto-2' class='mode-btn' onclick='setRelayMode(2, "auto")'>AUTO</button></div>
+                <div id='mode-status-2' class='mode-status-text'>Mode Manual Aktif</div>
+                <svg id='bulb2' class='bulb-icon bulb-off' viewBox='0 0 24 24'><path d='M12,2A7,7 0 0,0 5,9C5,11.38 6.19,13.47 8,14.74V17A1,1 0 0,0 9,18H15A1,1 0 0,0 16,17V14.74C17.81,13.47 19,11.38 19,9A7,7 0 0,0 12,2M9,20A1,1 0 0,0 10,21H14A1,1 0 0,0 15,20V19H9V20Z'/></svg>
+                <div class='switch-container'><label class='switch'><input type='checkbox' id='sw2' onclick='toggleRelay(2)'><span class='slider'></span></label></div>
+                <div style='display:none;'>
+                    <input type='hidden' id='on-val-2-0'><input type='hidden' id='off-val-2-0'><input type='hidden' id='on-val-2-1'><input type='hidden' id='off-val-2-1'><input type='hidden' id='on-val-2-2'><input type='hidden' id='off-val-2-2'><input type='hidden' id='on-val-2-3'><input type='hidden' id='off-val-2-3'><input type='hidden' id='on-val-2-4'><input type='hidden' id='off-val-2-4'><input type='hidden' id='on-val-2-5'><input type='hidden' id='off-val-2-5'><input type='hidden' id='on-val-2-6'><input type='hidden' id='off-val-2-6'>
+                </div>
+                <div class='timer-section'><div class='sched-btn-row'>
+                    <button type='button' id='open-sched-btn-2' class='open-sched-btn' onclick='clickAturRelayJadwal(2)' disabled>Atur Jadwal</button>
+                    <button type='button' id='del-btn-2' class='del-timer-btn' onclick='deleteRelayTimer(2)' disabled>Hapus Jadwal</button>
+                </div><div id='sched-status-2'></div></div>
+                <div class='card-footer-row'>
+                    <button type='button' class='sync-icon-btn' onclick='openPreviewModal(2)' title='Lihat Detail Jadwal'>&#128065;</button>
+                    <button type='button' id='sync-btn-2' class='sync-icon-btn' onclick='syncRelayWithMaster(2)' title='Sinkronisasi Master'><svg viewBox='0 0 24 24'><path d='M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z'/></svg></button>
+                    <div class='card-center-bottom-label'>R2</div>
+                </div>
+            </div>
+
+            <!-- Relay 3 -->
+            <div id='card-3' class='neu-card'>
+                <div class='relay-title-wrapper'><div id='relay-title-3' class='relay-title-text'>Lampu Teras Samping</div></div>
+                <div class='mode-toggle-box'><button id='btn-man-3' class='mode-btn active-manual' onclick='setRelayMode(3, "manual")'>MANUAL</button><button id='btn-auto-3' class='mode-btn' onclick='setRelayMode(3, "auto")'>AUTO</button></div>
+                <div id='mode-status-3' class='mode-status-text'>Mode Manual Aktif</div>
+                <svg id='bulb3' class='bulb-icon bulb-off' viewBox='0 0 24 24'><path d='M12,2A7,7 0 0,0 5,9C5,11.38 6.19,13.47 8,14.74V17A1,1 0 0,0 9,18H15A1,1 0 0,0 16,17V14.74C17.81,13.47 19,11.38 19,9A7,7 0 0,0 12,2M9,20A1,1 0 0,0 10,21H14A1,1 0 0,0 15,20V19H9V20Z'/></svg>
+                <div class='switch-container'><label class='switch'><input type='checkbox' id='sw3' onclick='toggleRelay(3)'><span class='slider'></span></label></div>
+                <div style='display:none;'>
+                    <input type='hidden' id='on-val-3-0'><input type='hidden' id='off-val-3-0'><input type='hidden' id='on-val-3-1'><input type='hidden' id='off-val-3-1'><input type='hidden' id='on-val-3-2'><input type='hidden' id='off-val-3-2'><input type='hidden' id='on-val-3-3'><input type='hidden' id='off-val-3-3'><input type='hidden' id='on-val-3-4'><input type='hidden' id='off-val-3-4'><input type='hidden' id='on-val-3-5'><input type='hidden' id='off-val-3-5'><input type='hidden' id='on-val-3-6'><input type='hidden' id='off-val-3-6'>
+                </div>
+                <div class='timer-section'><div class='sched-btn-row'>
+                    <button type='button' id='open-sched-btn-3' class='open-sched-btn' onclick='clickAturRelayJadwal(3)' disabled>Atur Jadwal</button>
+                    <button type='button' id='del-btn-3' class='del-timer-btn' onclick='deleteRelayTimer(3)' disabled>Hapus Jadwal</button>
+                </div><div id='sched-status-3'></div></div>
+                <div class='card-footer-row'>
+                    <button type='button' class='sync-icon-btn' onclick='openPreviewModal(3)' title='Lihat Detail Jadwal'>&#128065;</button>
+                    <button type='button' id='sync-btn-3' class='sync-icon-btn' onclick='syncRelayWithMaster(3)' title='Sinkronisasi Master'><svg viewBox='0 0 24 24'><path d='M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z'/></svg></button>
+                    <div class='card-center-bottom-label'>R3</div>
+                </div>
+            </div>
+
+            <!-- Relay 4 -->
+            <div id='card-4' class='neu-card'>
+                <div class='relay-title-wrapper'><div id='relay-title-4' class='relay-title-text'>Stop Kontak</div></div>
+                <div class='mode-toggle-box'><button id='btn-man-4' class='mode-btn active-manual' onclick='setRelayMode(4, "manual")'>MANUAL</button><button id='btn-auto-4' class='mode-btn' onclick='setRelayMode(4, "auto")'>AUTO</button></div>
+                <div id='mode-status-4' class='mode-status-text'>Mode Manual Aktif</div>
+                <svg id='bulb4' class='bulb-icon bulb-off' viewBox='0 0 24 24'><path d='M10,2H14V4H10V2M5,5H19V21H5V5M7,7V9H17V7H7M7,11V19H17V11H7M9,13H11V17H9V13M13,13H15V17H13V13Z'/></svg>
+                <div class='switch-container'><label class='switch'><input type='checkbox' id='sw4' onclick='toggleRelay(4)'><span class='slider'></span></label></div>
+                <div style='display:none;'>
+                    <input type='hidden' id='on-val-4-0'><input type='hidden' id='off-val-4-0'><input type='hidden' id='on-val-4-1'><input type='hidden' id='off-val-4-1'><input type='hidden' id='on-val-4-2'><input type='hidden' id='off-val-4-2'><input type='hidden' id='on-val-4-3'><input type='hidden' id='off-val-4-3'><input type='hidden' id='on-val-4-4'><input type='hidden' id='off-val-4-4'><input type='hidden' id='on-val-4-5'><input type='hidden' id='off-val-4-5'><input type='hidden' id='on-val-4-6'><input type='hidden' id='off-val-4-6'>
+                </div>
+                <div class='timer-section'><div class='sched-btn-row'>
+                    <button type='button' id='open-sched-btn-4' class='open-sched-btn' onclick='clickAturRelayJadwal(4)' disabled>Atur Jadwal</button>
+                    <button type='button' id='del-btn-4' class='del-timer-btn' onclick='deleteRelayTimer(4)' disabled>Hapus Jadwal</button>
+                </div><div id='sched-status-4'></div></div>
+                <div class='card-footer-row'>
+                    <button type='button' class='sync-icon-btn' onclick='openPreviewModal(4)' title='Lihat Detail Jadwal'>&#128065;</button>
+                    <button type='button' id='sync-btn-4' class='sync-icon-btn' onclick='syncRelayWithMaster(4)' title='Sinkronisasi Master'><svg viewBox='0 0 24 24'><path d='M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z'/></svg></button>
+                    <div class='card-center-bottom-label'>R4</div>
+                </div>
+            </div>
+
+            <div style='display: flex; justify-content: center; gap: 8px; margin-top: 14px; width: 100%; box-sizing: border-box; padding: 0 8px;'>
+                <button id='btnOffAll' class='master-btn btn-off-all' style='width: 48%; margin: 0;' onclick='masterControl("off")'>Matikan Semua</button>
+                <button id='btnOnAll' class='master-btn btn-on-all' style='width: 48%; margin: 0;' onclick='masterControl("on")'>Nyalakan Semua</button>
+            </div>
+        </div>
+
+        <div class='log-container'>
+            <div class='log-header-row'><span class='log-title'>[ TERMINAL LOG AKTIVITAS ]</span><a id='export-link-btn' href='#' class='export-btn'>📥 DOWNLOAD CSV</a></div>
+            <div class='log-filter-bar'>
+                <button id='btn-filter-ALL' class='log-filter-btn active-filter' onclick="setLogFilter('ALL')">Semua</button>
+                <button id='btn-filter-Kontrol' class='log-filter-btn' onclick="setLogFilter('Kontrol')">Kontrol</button>
+                <button id='btn-filter-Otomatis' class='log-filter-btn' onclick="setLogFilter('Otomatis')">Otomatis</button>
+                <button id='btn-filter-Peringatan' class='log-filter-btn' onclick="setLogFilter('Peringatan')">Peringatan</button>
+            </div>
+            <div id='log-box' class='log-box'></div>
+            <div class='lcd-cursor-row'>&gt; SYSTEM READY <span class='blink-cursor'>_</span></div>
+        </div>
+
+        <div style='text-align: center; margin: 20px 0;'>
+            <button class='theme-btn' onclick='toggleTheme()'>🌓 Tema</button>
+            <button class='logout-btn' onclick='doLogout()'>Logout</button>
+        </div>
+        <div class='footer-credit'>Local Relay Controller (ESP32) Developed by <span>Eka Jacx</span></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
